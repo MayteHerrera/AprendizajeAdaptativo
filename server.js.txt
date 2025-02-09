@@ -1,0 +1,101 @@
+const express = require('express');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const app = express();
+const port = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Clave secreta para firmar JWT (debe ser segura y almacenada en variables de entorno)
+const JWT_SECRET = 'tu_clave_secreta';
+
+// Simulación de una base de datos de usuarios
+const users = [];
+
+// Endpoint de registro
+app.post('/register', async (req, res) => {
+  const { email, password } = req.body;
+
+  // Verificar si el usuario ya existe
+  if (users.find(user => user.email === email)) {
+    return res.status(400).json({ message: 'El usuario ya existe' });
+  }
+
+  // Hash de la contraseña
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  // Guardar el usuario en la "base de datos"
+  const user = { email, password: hashedPassword };
+  users.push(user);
+
+  res.status(201).json({ message: 'Usuario registrado exitosamente' });
+});
+
+// Endpoint de inicio de sesión
+app.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  // Buscar el usuario en la "base de datos"
+  const user = users.find(user => user.email === email);
+  if (!user) {
+    return res.status(400).json({ message: 'Credenciales inválidas' });
+  }
+
+  // Verificar la contraseña
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) {
+    return res.status(400).json({ message: 'Credenciales inválidas' });
+  }
+
+  // Generar un JWT
+  const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+
+  res.json({ token });
+});
+
+// Middleware para verificar el JWT
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: 'Acceso no autorizado' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ message: 'Token inválido o expirado' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Endpoint protegido (ejemplo)
+app.get('/dashboard', authenticateToken, (req, res) => {
+  res.json({ message: 'Bienvenido al dashboard', user: req.user });
+});
+
+// Endpoint para analizar respuestas
+app.post('/analizar-respuesta', authenticateToken, (req, res) => {
+  const { respuesta } = req.body;
+  // Simular análisis de respuesta (aquí integrarías la API de DeepSeek)
+  const analisis = `Análisis de la respuesta: "${respuesta}"`;
+  res.json({ analisis });
+});
+
+// Endpoint para el chatbot
+app.post('/chatbot', authenticateToken, (req, res) => {
+  const { message } = req.body;
+  // Simular respuesta del chatbot (aquí integrarías la API de DeepSeek)
+  const reply = `Bot: Recibí tu mensaje: "${message}"`;
+  res.json({ reply });
+});
+
+// Iniciar el servidor
+app.listen(port, () => {
+  console.log(`Servidor backend corriendo en http://localhost:${port}`);
+});
